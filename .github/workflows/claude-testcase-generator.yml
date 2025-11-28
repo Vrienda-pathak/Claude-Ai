@@ -1,0 +1,47 @@
+name: Generate Test Cases with Claude
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
+jobs:
+  generate_tests:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Get changed files
+      id: changed
+      run: |
+        echo "files<<EOF" >> $GITHUB_OUTPUT
+        git diff --name-only HEAD^ HEAD >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Call Claude API to generate test cases
+      run: |
+        FILE_LIST=$(echo "${{ steps.changed.outputs.files }}")
+        CONTENT=$(cat $FILE_LIST)
+
+        RESPONSE=$(curl -s https://api.anthropic.com/v1/messages \
+          -H "Content-Type: application/json" \
+          -H "x-api-key: ${{ secrets.CLAUDE_API_KEY }}" \
+          -d '{
+            "model": "claude-3.5-sonnet",
+            "max_tokens": 2000,
+            "messages": [{
+              "role": "user",
+              "content": "Generate detailed test cases for the following code:\n\n'\"$CONTENT\"'"
+            }]
+          }')
+
+        echo "$RESPONSE" > claude_testcases.json
+
+    - name: Upload results
+      uses: actions/upload-artifact@v3
+      with:
+        name: claude-testcases
+        path: claude_testcases.json
