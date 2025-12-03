@@ -4,7 +4,7 @@ on:
     types: [opened, synchronize]
   push:
     branches:
-      - develop
+      - main
 jobs:
   generate_tests:
     runs-on: ubuntu-latest
