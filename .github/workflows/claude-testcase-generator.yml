@@ -73,14 +73,16 @@ jobs:
                 \"content\": \"Generate comprehensive unit test cases for the following code changes. Include test cases for normal functionality, edge cases, and error handling. Format as proper test code that can be executed:\\n\\n${{ steps.content.outputs.code }}\"
               }
             ]
-          }" > response.json
+          }" \
+        | jq -r '.content[].text' > testcases.txt
 
-        echo "Test cases generated for changed files"
-        cat response.json
+        echo "Readable test cases generated:"
+        cat testcases.txt
 
     - name: Upload test cases artifact
       uses: actions/upload-artifact@v4
       if: steps.changed.outputs.has_changes == 'true'
       with:
         name: generated-test-cases
-        path: response.json
+        path: testcases.txt
+
