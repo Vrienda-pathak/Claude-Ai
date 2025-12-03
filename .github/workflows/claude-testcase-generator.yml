@@ -5,14 +5,17 @@ on:
   push:
     branches:
       - develop
+
 jobs:
   generate_tests:
     runs-on: ubuntu-latest
+
     steps:
     - name: Checkout repo
       uses: actions/checkout@v3
       with:
         fetch-depth: 0
+
     - name: Get changed files
       id: changed
       run: |
@@ -21,6 +24,7 @@ jobs:
         else
           FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -E '\.(py|js|ts|java|cpp|c|rb|go|php|rs)$' || find . -name "*.py" -o -name "*.js" -o -name "*.ts" | head -3)
         fi
+
         if [ -z "$FILES" ]; then
           echo "No code files changed"
           echo "has_changes=false" >> $GITHUB_OUTPUT
@@ -33,6 +37,7 @@ jobs:
             echo 'EOF'
           } >> $GITHUB_OUTPUT
         fi
+
     - name: Read changed file contents
       id: content
       if: steps.changed.outputs.has_changes == 'true'
@@ -44,34 +49,40 @@ jobs:
             CONTENT="$CONTENT\n\n### File: $file\n$(cat "$file")"
           fi
         done
+
         {
           echo 'code<<EOF'
           echo -e "$CONTENT"
           echo 'EOF'
         } >> $GITHUB_OUTPUT
+
     - name: Call Claude API to generate test cases
       id: claude
       if: steps.changed.outputs.has_changes == 'true'
       run: |
-        curl -s -X POST https://api.anthropic.com/v1/messages \
-          -H "Content-Type: application/json" \
+        curl -s https://api.anthropic.com/v1/messages \
           -H "x-api-key: ${{ secrets.CLAUDE_API_KEY }}" \
           -H "anthropic-version: 2023-06-01" \
-          -d '{
-            "model": "claude-3-5-sonnet-20241022",
-            "max_tokens": 4000,
-            "messages": [
+          -H "content-type: application/json" \
+          -d "{
+            \"model\": \"claude-sonnet-4-5-20250929\",
+            \"max_tokens\": 4000,
+            \"messages\": [
               {
-                "role": "user",
-                "content": "Generate comprehensive unit test cases for the following code changes. Include test cases for normal functionality, edge cases, and error handling. Format as proper test code that can be executed:\n\n${{ steps.content.outputs.code }}"
+                \"role\": \"user\",
+                \"content\": \"Generate comprehensive unit test cases for the following code changes. Include test cases for normal functionality, edge cases, and error handling. Format as proper test code that can be executed:\\n\\n${{ steps.content.outputs.code }}\"
               }
             ]
-          }' > response.json
-        echo "Test cases generated for changed files"
-        cat response.json
+          }" \
+        | jq -r '.content[].text' > testcases.txt
+
+        echo "Readable test cases generated:"
+        cat testcases.txt
+
     - name: Upload test cases artifact
       uses: actions/upload-artifact@v4
       if: steps.changed.outputs.has_changes == 'true'
       with:
         name: generated-test-cases
-        path: response.json
+        path: testcases.txt
+
